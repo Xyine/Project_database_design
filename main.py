@@ -9,3 +9,4 @@ def connect_db():
     connection.close()
 
 connect_db()
+# test
