@@ -94,7 +94,12 @@ cursor = conn.cursor()
 # sql queries
 def get_driver_info(driverID=None):
     if driverID is None:
-        driver_query = "SELECT driverID, firstName, lastName FROM drivers"
+        driver_query = """
+        SELECT d.driverID, d.firstName, d.lastName, d.dob, d.nationality, d.wins, d.podiums, d.totalRaces, t.teamName
+        FROM drivers d
+        LEFT JOIN teams t ON d.teamID = t.teamID
+        WHERE d.isRetired = 0;
+        """
     else:
         driver_query = f"SELECT * FROM drivers WHERE driverID = {driverID}"
     return driver_query
@@ -138,7 +143,7 @@ Section: with telegram bot commands
 """
 
 def is_admin(user_id):
-    return user_id == '1140808847'
+    return user_id == '7216940433'
 
 
 # start page
@@ -150,7 +155,7 @@ def start(message):
     f1driver = KeyboardButton("F1 Drivers")
     f1team = KeyboardButton("F1 Teams")
     f1race = KeyboardButton("F1 Races")
-    rating = KeyboardButton("Rate driver 🎖️")
+    rating = KeyboardButton("Rate a driver 🎖️")
     keyboard.row(f1driver, f1team)
     keyboard.row(f1race, rating)
     bot.send_message(message.chat.id, "Hello 👋!\nThis is a F1 🏎️ Wiki page bot. Currently it is in development 🚧 and this is the demo 🤞 version", reply_markup=keyboard)
@@ -176,7 +181,7 @@ def get_data_from_db(query, params=()):
     return columns, rows
 
 
-def send_page(chat_id, page, data, columns, items_per_page, context, callback_prefix=None, message_id=None):
+def send_page(chat_id, page, data, columns, items_per_page, context, message_id=None):
     start = (page - 1) * items_per_page
     end = start + items_per_page
     page_data = data[start:end]
@@ -259,7 +264,7 @@ def handle_page_navigation(call):
         page = int(callback_data_parts[1])
         context = callback_data_parts[2]
 
-        if context == 'drivers':
+        if context == 'drivers' or context == 'rating':
             columns, rows = get_data_from_db(get_driver_info())
             data = rows
             items_per_page = 7
@@ -286,11 +291,10 @@ def handle_page_navigation(call):
 def format_results(columns, rows, context):
     result_message = ""
     for row in rows:
+        team_name = None
         if context == "teams":
             for col_name, value in zip(columns, row):
-                if col_name.lower() == "teamid":
-                    team_id = value
-                elif col_name.lower() == "teamname":
+                if col_name.lower() == "teamname":
                     team_name = value
                 elif col_name.lower() == "baselocation":
                     base_location = value
@@ -310,6 +314,8 @@ def format_results(columns, rows, context):
             result_message += f"Engine Supplier: {engine_supplier}\n\n"
         else:
             for col_name, value in zip(columns, row):
+                if col_name.lower() == "teamname":
+                    team_name = value
                 if col_name.lower() == "firstname":
                     first_name = value
                 elif col_name.lower() == "lastname":
@@ -324,9 +330,12 @@ def format_results(columns, rows, context):
                     podiums = value
                 elif col_name.lower() == "totalraces":
                     total_races = value
+                elif col_name.lower() == "teamname":  # handle teamName from the new query
+                    team_name = value
             result_message += f"<b>{first_name} {last_name}</b>\n\n"
             result_message += f"Date of Birth: {dob}\n"
             result_message += f"Nationality: {nationality}\n"
+            result_message += f"Team: {team_name}\n"
             result_message += f"Wins: {wins}\n"
             result_message += f"Podiums: {podiums}\n"
             result_message += f"Total Races: {total_races}\n\n"
@@ -338,13 +347,18 @@ def list_drivers(message):
     user_state(message, "driver_menu")
     query = get_driver_info()
     columns, drivers_data = get_data_from_db(query)
-    send_page(message.chat.id, page=1, data=drivers_data, columns=columns, items_per_page=7, callback_prefix="drivers", context="drivers")
+    send_page(message.chat.id, page=1, data=drivers_data, columns=columns, items_per_page=7, context="drivers")
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("drivers_"))
 def view_driver(call):
     driver_id = call.data.split("_")[1]
-    query = f"SELECT * FROM drivers WHERE driverID = {driver_id}"
+    query = f"""
+        SELECT d.driverID, d.firstName, d.lastName, d.dob, d.nationality, d.wins, d.podiums, d.totalRaces, t.teamName
+        FROM drivers d
+        LEFT JOIN teams t ON d.teamID = t.teamID
+        WHERE d.isRetired = 0 AND driverID = {driver_id};
+        """
     columns, driver_data = get_data_from_db(query)
 
     full_driver_info = format_results(columns, driver_data, context="drivers")
@@ -361,7 +375,7 @@ def list_teams(message):
     user_state(message, "team_menu")
     query = get_team_info()
     columns, teams_data = get_data_from_db(query)
-    send_page(message.chat.id, page=1, data=teams_data, columns=columns, items_per_page=5, callback_prefix="teams", context="teams")
+    send_page(message.chat.id, page=1, data=teams_data, columns=columns, items_per_page=5, context="teams")
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("teams_"))
@@ -379,24 +393,118 @@ def view_team(call):
     )
 
 
-@bot.message_handler(func=lambda message: message.text == "Rate driver 🎖️")
-def rate_driver(message):
+@bot.message_handler(func=lambda message: message.text == "Rate a driver 🎖️")
+def rating_driver(message):
     user_state(message, "rate_menu")
-    query = get_team_info()
-    columns, teams_data = get_data_from_db(query)
+    query = get_driver_info()
+    columns, drivers_data = get_data_from_db(query)
     bot.send_message(message.chat.id, message.text)
-    send_page(message.chat.id, page=1, data=drivers_data, columns=columns, items_per_page=7, callback_prefix="rate", context="rating")
+    send_page(message.chat.id, page=1, data=drivers_data, columns=columns, items_per_page=7, context="rating")
 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("rate_"))
-def handle_rate_driver(call):
+@bot.callback_query_handler(func=lambda call: call.data.startswith("rating_"))
+def handle_rating_driver(call):
     driver_id = call.data.split("_")[1]
-    bot.send_message(
-        chat_id=call.message.chat.id,
-        text=f"You selected driver ID {driver_id} to rate. Please provide your rating."
-    )
+
+    connection = sqlite3.connect('f1.db')
+    cursor = connection.cursor()
+    cursor.execute("SELECT firstname, lastname FROM drivers WHERE driverID = ?", (driver_id,))
+    result = cursor.fetchone()
+    connection.close()
+
+    if result:
+        driver_name = f"{result[0]} {result[1]}"
+    else:
+        driver_name = "Unknown Driver"
+
+    keyboard = InlineKeyboardMarkup(row_width=5)
+    buttons = [
+        InlineKeyboardButton(
+            text=str(i),
+            callback_data=f"rated_{i}_{driver_id}"
+        ) for i in range(1, 6)
+    ]
+    keyboard.add(*buttons)
+
+    message_format = f"Rate a driver:\n<b>{driver_name}</b>"
+
+    bot.send_message(call.message.chat.id, message_format, reply_markup=keyboard, parse_mode="HTML")
 
 
+def create_rating_table():
+    with sqlite3.connect('f1.db') as connection:
+        connection.execute("""
+        CREATE TABLE IF NOT EXISTS ratingByUser (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            userID INTEGER,
+            driverID INTEGER,
+            rating INTEGER,
+            date_time DATE
+        )
+        """)
+
+create_rating_table()
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("rated_"))
+def rated_driver(call):
+    user_state(call.message, "rated_page_menu")
+
+    user_id = call.message.from_user.id
+    logger.info(f"{call.data.split("_")[1]} in rated driver")
+
+    data = call.data.split("_")
+    rating = int(data[1])
+    driver_id = data[2]
+
+    date_formatted = datetime.now().strftime("%Y-%m-%d")
+    day = datetime.now().strftime("%d")
+
+    with sqlite3.connect('f1.db') as connection:
+        cur = connection.cursor()
+        check_query = "SELECT userID, driverID FROM ratingByUser WHERE userID = ? AND driverID = ? AND strftime('%d', date_time) = ?"
+        cur.execute(check_query, (user_id, driver_id, day))
+
+        existing_record = cur.fetchone()
+        logger.info(f"Existing record: {existing_record}")
+
+        if existing_record is not None:
+            update_query = "UPDATE ratingByUser SET rating = ? WHERE userID = ? AND driverID = ? AND strftime('%d', date_time) = ?"
+            cur.execute(update_query, (rating, user_id, driver_id, str(day)))
+            connection.commit()
+            print("Record updated")
+        else:
+            insert_query = "INSERT INTO ratingByUser (userID, driverID, rating, date_time) VALUES (?, ?, ?, ?)"
+            cur.execute(insert_query,(user_id, driver_id, int(rating), date_formatted))
+            connection.commit()
+            print("Record inserted")
+
+    bot.send_message(call.message.chat.id, f"You gave {rating} out of 5 rating!")
+
+
+@bot.message_handler(commands=['standings'])
+def rating_standings(message):
+    get_rating_query = f"""SELECT AVG(r.rating) AS 'rating', d.firstName || ' ' || d.lastName AS 'name' 
+                FROM ratingByUser r LEFT JOIN drivers d ON r.driverID = d.driverID 
+                GROUP BY d.driverID ORDER BY AVG(r.rating) DESC"""
+    with sqlite3.connect('f1.db') as connection:
+        cur = connection.cursor()
+        cur.execute(get_rating_query)
+
+    columns = [description[0] for description in cur.description]
+    rows = cur.fetchall()
+
+    result_message = "Driver of the day\n\n"
+    for row in rows:
+        rating_value = row[columns.index("rating")]
+        full_name = row[columns.index("name")]
+        result_message += f"Full Name: <b>{full_name}</b>\n"
+        result_message += f"Average rating: <b>{rating_value:.2f}</b>\n\n"
+
+    bot.send_message(message.chat.id, result_message, parse_mode="HTML")
+
+
+cursor.close()
 conn.close()
 
 
