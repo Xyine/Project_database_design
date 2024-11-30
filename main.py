@@ -81,6 +81,7 @@ def start(message):
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
     f1driver = KeyboardButton("F1 Drivers")
     f1team = KeyboardButton("F1 Teams")
+    f1race = KeyboardButton("F1 Races")
     keyboard.row(f1driver, f1team)
     bot.send_message(message.chat.id, "Hello 👋!\nThis is a F1 🏎️ Wiki page bot. Currently it is in development 🚧 and this is the demo 🤞 version", reply_markup=keyboard)
 
