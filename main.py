@@ -143,7 +143,7 @@ Section: with telegram bot commands
 """
 
 def is_admin(user_id):
-    return user_id == '7216940433'
+    return user_id == '1140808847' or user_id == '7216940433'
 
 
 # start page
@@ -404,6 +404,7 @@ def rating_driver(message):
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("rating_"))
 def handle_rating_driver(call):
+    user_state(call.message, "handle_rate_menu")
     driver_id = call.data.split("_")[1]
 
     connection = sqlite3.connect('f1.db')
@@ -484,6 +485,7 @@ def rated_driver(call):
 
 @bot.message_handler(commands=['standings'])
 def rating_standings(message):
+    user_state(message, "standings_menu")
     get_rating_query = f"""SELECT AVG(r.rating) AS 'rating', d.firstName || ' ' || d.lastName AS 'name' 
                 FROM ratingByUser r LEFT JOIN drivers d ON r.driverID = d.driverID 
                 GROUP BY d.driverID ORDER BY AVG(r.rating) DESC"""
