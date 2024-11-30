@@ -1,5 +1,4 @@
 import telebot, sqlite3, pandas as pd, logging
-from numpy.ma.extras import row_stack
 from telebot.types import KeyboardButton, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup
 
 
@@ -64,7 +63,7 @@ def import_csv_to_sqlite(csv_file, table_name, connection):
 
 #importing csv files
 import_csv_to_sqlite('Drivers.csv', 'drivers', conn)
-import_csv_to_sqlite('Races.csv', 'results', conn)
+import_csv_to_sqlite('Races.csv', 'races', conn)
 import_csv_to_sqlite('Teams.csv', 'teams', conn)
 
 
@@ -354,6 +353,10 @@ def f1_driver(call):
         text=result_message,
         parse_mode="HTML"
     )
+
+
+cursor.close()
+conn.close()
 
 
 if __name__ == '__main__':
