@@ -98,7 +98,6 @@ def get_driver_info(driverID=None):
         SELECT d.driverID, d.firstName, d.lastName, d.dob, d.nationality, d.wins, d.podiums, d.totalRaces, t.teamName
         FROM drivers d
         LEFT JOIN teams t ON d.teamID = t.teamID
-        WHERE d.isRetired = 0;
         """
     else:
         driver_query = f"SELECT * FROM drivers WHERE driverID = {driverID}"
@@ -199,7 +198,7 @@ def handle_page_navigation(call):
         if context == 'drivers' or context == 'rating':
             columns, rows = get_data_from_db(get_driver_info())
             data = rows
-            items_per_page = 8
+            items_per_page = 9
         elif context == 'teams':
             columns, rows = get_data_from_db(get_team_info())
             data = rows
@@ -345,6 +344,7 @@ def format_results(columns, rows, context):
             result_message += f"Round: <b>{round}</b>\n"
             result_message += f"Date: <b>{date}</b>\n\n"
         else:
+            is_retired = 0
             for col_name, value in zip(columns, row):
                 if col_name.lower() == "teamname":
                     team_name = value
@@ -362,8 +362,11 @@ def format_results(columns, rows, context):
                     podiums = value
                 elif col_name.lower() == "totalraces":
                     total_races = value
-                elif col_name.lower() == "teamname":  # handle teamName from the new query
-                    team_name = value
+                elif col_name.lower() == "teamname":
+                    if value == None:
+                        team_name = 'Retired'
+                    else:
+                        team_name = value
             result_message += f"<b>{first_name} {last_name}</b>\n\n"
             result_message += f"Date of Birth: <b>{dob}</b>\n"
             result_message += f"Nationality: <b>{nationality}</b>\n"
@@ -379,7 +382,7 @@ def list_drivers(message):
     user_state(message, "driver_menu")
     query = get_driver_info()
     columns, drivers_data = get_data_from_db(query)
-    send_page(message.chat.id, page=1, data=drivers_data, columns=columns, items_per_page=8, context="drivers")
+    send_page(message.chat.id, page=1, data=drivers_data, columns=columns, items_per_page=9, context="drivers")
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("drivers_"))
@@ -389,7 +392,7 @@ def view_driver(call):
         SELECT d.driverID, d.firstName, d.lastName, d.dob, d.nationality, d.wins, d.podiums, d.totalRaces, t.teamName
         FROM drivers d
         LEFT JOIN teams t ON d.teamID = t.teamID
-        WHERE d.isRetired = 0 AND driverID = {driver_id};
+        WHERE driverID = {driver_id};
         """
     columns, driver_data = get_data_from_db(query)
 
