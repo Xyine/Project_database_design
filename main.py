@@ -567,11 +567,14 @@ def rating_standings(message):
     today_date = datetime.now().strftime("%Y-%m-%d")
     yesterday_date = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
 
-    result_message = f"<b>Winner ({yesterday_date}):\n</b>"
-    for row_yes in rows_yes:
-        full_name = row_yes[columns_yes.index("name")]
-        team_name = row_yes[columns_yes.index("teamName")]
-        result_message += f"<b>{full_name} ({team_name})</b>\n\n"
+    if rows_yes:
+        result_message = f"<b>Winner ({yesterday_date}):\n</b>"
+        for row_yes in rows_yes:
+            full_name = row_yes[columns_yes.index("name")]
+            team_name = row_yes[columns_yes.index("teamName")]
+            result_message += f"<b>{full_name} ({team_name})</b>\n\n"
+    else:
+        result_message = ""
 
     columns = [description[0] for description in cur.description]
     rows = cur.fetchall()
