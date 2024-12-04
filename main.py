@@ -14,6 +14,7 @@ bot = telebot.TeleBot(TOKEN)
 
 # user related
 user_states = {}
+time = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
 
 def create_table():
@@ -31,25 +32,9 @@ def create_table():
 
 create_table()
 
-def insert_state(user_id, user_state, now_time):
-    connection = sqlite3.connect('f1.db')
-    with connection:
-        connection.execute(
-            "INSERT INTO userStates (user_id, state, date) VALUES (?, ?, ?)",
-            (user_id, user_state, now_time)
-        )
-    connection.close()
-
-def update_state(user_state, user_id):
-    connection = sqlite3.connect('f1.db')
-    with connection:
-        connection.execute(
-            "UPDATE userStates SET state = ?, date = ? WHERE user_id = ?",
-            (user_state, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user_id)
-        )
-    connection.close()
 
 def get_state(user_id):
+    user_id = user_id
     connection = sqlite3.connect('f1.db')
     state = ''
     try:
@@ -71,13 +56,32 @@ def get_state(user_id):
     return state
 
 
+def insert_state(user_id, user_state, now_time):
+    connection = sqlite3.connect('f1.db')
+    with connection:
+        connection.execute(
+            "INSERT INTO userStates (user_id, state, date) VALUES (?, ?, ?)",
+            (user_id, user_state, now_time)
+        )
+    connection.close()
+
+def update_state(user_state, user_id):
+    connection = sqlite3.connect('f1.db')
+    with connection:
+        connection.execute(
+            "UPDATE userStates SET state = ?, date = ? WHERE user_id = ?",
+            (user_state, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), user_id)
+        )
+    connection.close()
+
+
 def user_state(message, user_state):
     user_id = message.from_user.id
     user_states[message.chat.id] = user_state
 
     current_state = get_state(user_id)
     now_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    if not current_state:
+    if not current_state or current_state == '':
         insert_state(user_id=user_id, user_state=user_states[message.chat.id], now_time=now_time)
     else:
         update_state(user_state=user_states[message.chat.id], user_id=user_id)
@@ -112,10 +116,38 @@ def get_team_info(teamID=None):
 
 def get_race_info(raceID=None):
     if raceID is None:
-        race_query = "SELECT * FROM races"
+        race_query = """SELECT r.*, c.name AS circuitName, d.firstName || ' ' || d.lastName AS fullname FROM races r
+                    LEFT JOIN circuits c ON r.circuitID = c.circuitID
+                    LEFT JOIN drivers d ON r.driverID = d.driverID"""
     else:
-        race_query = f"SELECT * FROM races WHERE raceID = {raceID}"
+        race_query = f"""SELECT r.*, c.name AS circuitName, d.firstName || ' ' || d.lastName AS fullname FROM races r
+                    LEFT JOIN circuits c ON r.circuitID = c.circuitID
+                    LEFT JOIN drivers d ON r.driverID = d.driverID WHERE r.raceID = {raceID}"""
     return race_query
+
+
+def get_circuit_info(circuitID=None):
+    if circuitID is None:
+        circuit_query = """SELECT c.*, d.firstName || ' ' || d.lastName AS fullname FROM circuits c
+                    LEFT JOIN drivers d ON c.driverID = d.driverID"""
+    else:
+        circuit_query = f"""SELECT c.*, d.firstName || ' ' || d.lastName AS fullname FROM circuits c
+                    LEFT JOIN drivers d ON c.driverID = d.driverID WHERE circuitID = {circuitID}"""
+    return circuit_query
+
+
+def get_champion_info(seasonID=None):
+    if seasonID is None:
+        champion_query = """SELECT c.*, d.firstName || ' ' || d.lastName AS fullname, t.teamName FROM champions c
+                    LEFT JOIN drivers d ON c.driverID = d.driverID
+                    LEFT JOIN teams t ON c.teamID = t.teamID"""
+    else:
+        champion_query = f"""SELECT c.*, d.firstName || ' ' || d.lastName AS fullname, t.teamName FROM champions c
+                    LEFT JOIN drivers d ON c.driverID = d.driverID
+                    LEFT JOIN teams t ON c.teamID = t.teamID
+                    WHERE c.seasonID = {seasonID};"""
+    return champion_query
+
 
 
 """
@@ -140,6 +172,8 @@ def import_csv_to_sqlite(csv_file, table_name, connection):
 import_csv_to_sqlite('Drivers.csv', 'drivers', conn)
 import_csv_to_sqlite('Teams.csv', 'teams', conn)
 import_csv_to_sqlite('Races.csv', 'races', conn)
+import_csv_to_sqlite('Circuits.csv', 'circuits', conn)
+import_csv_to_sqlite('Champions.csv', 'champions', conn)
 
 
 """
@@ -160,9 +194,12 @@ def start(message):
     f1driver = KeyboardButton("F1 Drivers")
     f1team = KeyboardButton("F1 Teams")
     f1race = KeyboardButton("F1 Races (2024)")
+    f1circuit = KeyboardButton("F1 Circuits")
+    f1champion = KeyboardButton("F1 Champions")
     rating = KeyboardButton("Rate a driver 🎖️")
     keyboard.row(f1driver, f1team)
-    keyboard.row(f1race, rating)
+    keyboard.row(f1race, f1circuit)
+    keyboard.row(f1champion, rating)
     bot.send_message(message.chat.id, "Hello 👋!\nThis is a F1 🏎️ Wiki page bot. Currently it is in development 🚧 and this is the demo 🤞 version", reply_markup=keyboard)
 
 
@@ -198,13 +235,21 @@ def handle_page_navigation(call):
         if context == 'drivers' or context == 'rating':
             columns, rows = get_data_from_db(get_driver_info())
             data = rows
-            items_per_page = 9
+            items_per_page = 8
         elif context == 'teams':
             columns, rows = get_data_from_db(get_team_info())
             data = rows
             items_per_page = 5
         elif context == 'races':
             columns, rows = get_data_from_db(get_race_info())
+            data = rows
+            items_per_page = 9
+        elif context == 'circuits':
+            columns, rows = get_data_from_db(get_circuit_info())
+            data = rows
+            items_per_page = 8
+        elif context == 'champions':
+            columns, rows = get_data_from_db(get_champion_info())
             data = rows
             items_per_page = 9
         else:
@@ -291,6 +336,20 @@ def format_data(columns, rows, context):
                 elif col_name.lower() == "name":
                     race_name = value
             formatted_row += f"<b>{race_id}. {race_name}</b>\n"
+        elif context == "circuits":
+            for col_name, value in zip(columns, row):
+                if col_name.lower() == "circuitid":
+                    circuit_id = value
+                if col_name.lower() == "name":
+                    circuit_name = value
+            formatted_row += f"<b>{circuit_id}. {circuit_name}</b>\n"
+        elif context == "champions":
+            for col_name, value in zip(columns, row):
+                if col_name.lower() == "seasonid":
+                    season_id = value
+                elif col_name.lower() == "year":
+                    season_year = value
+            formatted_row += f"<b>{season_id}. {season_year}</b>\n"
         else:
             for col_name, value in zip(columns, row):
                 if col_name.lower() == "firstname":
@@ -339,12 +398,54 @@ def format_results(columns, rows, context):
                     name = value
                 elif col_name.lower() == "date":
                     date = value
+                elif col_name.lower() == "circuitname":
+                    circuit_name = value
+                elif col_name.lower() == "fullname":
+                    full_name = value
             result_message += f"<b>{name}</b>\n\n"
             result_message += f"Season: <b>{season}</b>\n"
             result_message += f"Round: <b>{round}</b>\n"
+            result_message += f"Winner: <b>{full_name}</b>\n"
+            result_message += f"Circuit name: <b>{circuit_name}</b>\n"
             result_message += f"Date: <b>{date}</b>\n\n"
+        elif context == "circuits":
+            for col_name, value in zip(columns, row):
+                if col_name.lower() == "name":
+                    circuit_name = value
+                elif col_name.lower() == "location":
+                    circuit_location = value
+                elif col_name.lower() == "country":
+                    circuit_country = value
+                elif col_name.lower() == "length_km":
+                    circuit_length = value
+                elif col_name.lower() == "totaldistance_km":
+                    circuit_distance = value
+                elif col_name.lower() == "numberoflaps":
+                    circuit_numberoflaps = value
+                elif col_name.lower() == "recordlaptime":
+                    circuit_recordlaptime = value
+                elif col_name.lower() == "fullname":
+                    circuit_fullname = value
+            result_message += f"<b>{circuit_name}</b>\n\n"
+            result_message += f"Location: <b>{circuit_location}</b>\n"
+            result_message += f"Country: <b>{circuit_country}</b>\n"
+            result_message += f"Length Km: <b>{circuit_length}</b>\n"
+            result_message += f"Distance Km: <b>{circuit_distance}</b>\n"
+            result_message += f"Number of laps: <b>{circuit_numberoflaps}</b>\n"
+            result_message += f"Record lap time: <b>{circuit_recordlaptime}</b>\n"
+            result_message += f"Record by: <b>{circuit_fullname}</b>\n"
+        elif context == "champions":
+            for col_name, value in zip(columns, row):
+                if col_name.lower() == "year":
+                    season_year = value
+                elif col_name.lower() == "fullname":
+                    driver_fullname = value
+                elif col_name.lower() == "teamname":
+                    team_name = value
+            result_message += f"<b>{season_year}</b>\n\n"
+            result_message += f"Champion driver: <b>{driver_fullname}</b>\n"
+            result_message += f"Constructor champion: <b>{team_name}</b>\n"
         else:
-            is_retired = 0
             for col_name, value in zip(columns, row):
                 if col_name.lower() == "teamname":
                     team_name = value
@@ -382,27 +483,28 @@ def list_drivers(message):
     user_state(message, "driver_menu")
     query = get_driver_info()
     columns, drivers_data = get_data_from_db(query)
-    send_page(message.chat.id, page=1, data=drivers_data, columns=columns, items_per_page=9, context="drivers")
+    send_page(message.chat.id, page=1, data=drivers_data, columns=columns, items_per_page=8, context="drivers")
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("drivers_"))
 def view_driver(call):
-    driver_id = call.data.split("_")[1]
-    query = f"""
-        SELECT d.driverID, d.firstName, d.lastName, d.dob, d.nationality, d.wins, d.podiums, d.totalRaces, t.teamName
-        FROM drivers d
-        LEFT JOIN teams t ON d.teamID = t.teamID
-        WHERE driverID = {driver_id};
-        """
-    columns, driver_data = get_data_from_db(query)
+    if get_state(call.from_user.id) == "driver_menu":
+        driver_id = call.data.split("_")[1]
+        query = f"""
+            SELECT d.driverID, d.firstName, d.lastName, d.dob, d.nationality, d.wins, d.podiums, d.totalRaces, t.teamName
+            FROM drivers d
+            LEFT JOIN teams t ON d.teamID = t.teamID
+            WHERE driverID = {driver_id};
+            """
+        columns, driver_data = get_data_from_db(query)
 
-    full_driver_info = format_results(columns, driver_data, context="drivers")
+        full_driver_info = format_results(columns, driver_data, context="drivers")
 
-    bot.send_message(
-        chat_id=call.message.chat.id,
-        text=f"<b>Driver Info:</b>\n\n{full_driver_info}",
-        parse_mode="HTML"
-    )
+        bot.send_message(
+            chat_id=call.message.chat.id,
+            text=f"<b>Driver Info:</b>\n\n{full_driver_info}",
+            parse_mode="HTML"
+        )
 
 
 @bot.message_handler(func=lambda message: message.text == "F1 Teams")
@@ -415,17 +517,18 @@ def list_teams(message):
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("teams_"))
 def view_team(call):
-    team_id = call.data.split("_")[1]
-    query = f"SELECT * FROM teams WHERE teamID = {team_id}"
-    columns, team_data = get_data_from_db(query)
+    if get_state(call.from_user.id) == "team_menu":
+        team_id = call.data.split("_")[1]
+        query = f"SELECT * FROM teams WHERE teamID = {team_id}"
+        columns, team_data = get_data_from_db(query)
 
-    full_team_info = format_results(columns, team_data, context="teams")
+        full_team_info = format_results(columns, team_data, context="teams")
 
-    bot.send_message(
-        chat_id=call.message.chat.id,
-        text=f"<b>Team Info:</b>\n\n{full_team_info}",
-        parse_mode="HTML"
-    )
+        bot.send_message(
+            chat_id=call.message.chat.id,
+            text=f"<b>Team Info:</b>\n\n{full_team_info}",
+            parse_mode="HTML"
+        )
 
 
 @bot.message_handler(func=lambda message: message.text == "F1 Races (2024)")
@@ -438,17 +541,66 @@ def list_races(message):
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("races_"))
 def view_race(call):
-    race_id = call.data.split("_")[1]
-    query = get_race_info(race_id)
-    columns, race_data = get_data_from_db(query)
+    if get_state(call.from_user.id) == "race_menu":
+        race_id = call.data.split("_")[1]
+        query = get_race_info(race_id)
+        columns, race_data = get_data_from_db(query)
 
-    full_race_info = format_results(columns, race_data, context="races")
+        full_race_info = format_results(columns, race_data, context="races")
 
-    bot.send_message(
-        chat_id=call.message.chat.id,
-        text=f"<b>Race Info:</b>\n\n{full_race_info}",
-        parse_mode="HTML"
-    )
+        bot.send_message(
+            chat_id=call.message.chat.id,
+            text=f"<b>Race Info:</b>\n\n{full_race_info}",
+            parse_mode="HTML"
+        )
+
+
+@bot.message_handler(func=lambda message: message.text == "F1 Circuits")
+def list_circuits(message):
+    user_state(message, "circuit_menu")
+    query = get_circuit_info()
+    columns, circuits_data = get_data_from_db(query)
+    send_page(message.chat.id, page=1, data=circuits_data, columns=columns, items_per_page=8, context="circuits")
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("circuits_"))
+def view_circuit(call):
+    if get_state(call.from_user.id) == "circuit_menu":
+        circuit_id = call.data.split("_")[1]
+        query = get_circuit_info(circuit_id)
+        columns, circuit_data = get_data_from_db(query)
+
+        full_circuit_info = format_results(columns, circuit_data, context="circuits")
+
+        bot.send_message(
+            chat_id=call.message.chat.id,
+            text=f"<b>Circuit Info:</b>\n\n{full_circuit_info}",
+            parse_mode="HTML"
+        )
+
+
+@bot.message_handler(func=lambda message: message.text == "F1 Champions")
+def list_champions(message):
+    user_state(message, "champion_menu")
+    query = get_champion_info()
+    columns, champions_data = get_data_from_db(query)
+    send_page(message.chat.id, page=1, data=champions_data, columns=columns, items_per_page=9, context="champions")
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("champions_"))
+def view_champion(call):
+    if get_state(call.from_user.id) == "champion_menu":
+        season_id = call.data.split("_")[1]
+        query = get_champion_info(season_id)
+        columns, champion_data = get_data_from_db(query)
+
+        full_champion_info = format_results(columns, champion_data, context="champions")
+
+        bot.send_message(
+            chat_id=call.message.chat.id,
+            text=f"<b>Champion Info:</b>\n\n{full_champion_info}",
+            parse_mode="HTML"
+        )
 
 
 @bot.message_handler(func=lambda message: message.text == "Rate a driver 🎖️")
@@ -462,32 +614,33 @@ def rating_driver(message):
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("rating_"))
 def handle_rating_driver(call):
-    user_state(call.message, "handle_rate_menu")
-    driver_id = call.data.split("_")[1]
+    if get_state(call.from_user.id) == "rate_menu":
+        user_state(call.message, "handle_rate_menu")
+        driver_id = call.data.split("_")[1]
 
-    connection = sqlite3.connect('f1.db')
-    cursor = connection.cursor()
-    cursor.execute("SELECT firstname, lastname FROM drivers WHERE driverID = ?", (driver_id,))
-    result = cursor.fetchone()
-    connection.close()
+        connection = sqlite3.connect('f1.db')
+        cursor = connection.cursor()
+        cursor.execute("SELECT firstname, lastname FROM drivers WHERE driverID = ?", (driver_id,))
+        result = cursor.fetchone()
+        connection.close()
 
-    if result:
-        driver_name = f"{result[0]} {result[1]}"
-    else:
-        driver_name = "Unknown Driver"
+        if result:
+            driver_name = f"{result[0]} {result[1]}"
+        else:
+            driver_name = "Unknown Driver"
 
-    keyboard = InlineKeyboardMarkup(row_width=5)
-    buttons = [
-        InlineKeyboardButton(
-            text=str(i),
-            callback_data=f"rated_{i}_{driver_id}"
-        ) for i in range(1, 6)
-    ]
-    keyboard.add(*buttons)
+        keyboard = InlineKeyboardMarkup(row_width=5)
+        buttons = [
+            InlineKeyboardButton(
+                text=str(i),
+                callback_data=f"rated_{i}_{driver_id}"
+            ) for i in range(1, 6)
+        ]
+        keyboard.add(*buttons)
 
-    message_format = f"Rate a driver (Driver of the day):\n<b>{driver_name}</b>"
+        message_format = f"Rate a driver (Driver of the day):\n<b>{driver_name}</b>"
 
-    bot.send_message(call.message.chat.id, message_format, reply_markup=keyboard, parse_mode="HTML")
+        bot.send_message(call.message.chat.id, message_format, reply_markup=keyboard, parse_mode="HTML")
 
 
 def create_rating_table():

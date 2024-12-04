@@ -25,3 +25,6 @@ driverID,firstName,lastName,dob,nationality,teamID,wins,podiums,totalRaces,isRet
 24,Valtteri,Bottas,1989-08-28,Finnish,10,10,67,212,0
 26,Michael,Schumacher,1969-01-03,German,0,91,155,308,1
 27,Sebastian,Vettel,1987-07-03,German,0,48,122,299,1
+28,Pedro,de la Rosa,1971-02-24,Spanish,0,6,11,107,1
+29,Rubens,Barrichello,1972-03-23,Brazilian,0,11,68,326,1
+30,Kimi,Räikkönen,1979-10-17,Finnish,0,21,103,353,1
